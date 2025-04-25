@@ -1,0 +1,87 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth != null && 
+        request.auth.token.email == 'obsadmin@mydomainliving.co.za';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isDocument() {
+      return request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/msword') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    }
+
+    function isValidFile() {
+      return isImage() || isDocument();
+    }
+
+    function isWithinSizeLimit() {
+      return request.resource.size < 10 * 1024 * 1024; // 10MB max
+    }
+
+    // Allow full access to admins for all files
+    match /{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // Regular user access rules
+    match /users/{userId}/profile/{imageId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        isOwner(userId) && 
+        isImage() && 
+        isWithinSizeLimit();
+    }
+
+    match /maintenance-requests/{userId}/{requestId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if isAuthenticated() && 
+        isOwner(userId) && 
+        isValidFile() && 
+        isWithinSizeLimit();
+    }
+
+    match /feedback/{userId}/{feedbackId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if isAuthenticated() && 
+        isOwner(userId) && 
+        isValidFile() && 
+        isWithinSizeLimit();
+    }
+
+    match /guest/{userId}/{requestId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if isAuthenticated() && 
+        isOwner(userId) && 
+        isValidFile() && 
+        isWithinSizeLimit();
+    }
+
+    match /complaints/{userId}/{complaintId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if isAuthenticated() && 
+        isOwner(userId) && 
+        isValidFile() && 
+        isWithinSizeLimit();
+    }
+
+    match /announcements/{announcementId}/{fileName} {
+      allow read: if isAuthenticated();
+    }
+  }
+}
